@@ -1,5 +1,8 @@
 name: Keepalive - 防止定时工作流被 GitHub 自动禁用
 
+# GitHub 规则：仓库 60 天无任何 commit 会自动禁用定时工作流。
+# 此工作流每周检查一次，若超过 50 天无提交则创建一个空提交来保活。
+
 on:
   schedule:
     - cron: '0 3 * * 1'
@@ -9,8 +12,21 @@ jobs:
   keepalive:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: gautamkrishnar/keepalive-workflow@v2
+      - name: 🔀 Check out code
+        uses: actions/checkout@v4
+
+      - name: 📦 Check last commit and keepalive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          LAST_DAYS=$(( ($(date +%s) - $(git log -1 --format=%ct)) / 86400 ))
+          echo "距上次提交已有 ${LAST_DAYS} 天"
+          if [ "${LAST_DAYS}" -ge 50 ]; then
+            git commit --allow-empty -m "chore: keepalive - 防止 60 天不活跃被禁用定时工作流"
+            git push
+            echo "✅ 已创建保活提交"
+          else
+            echo "✅ 仓库仍活跃，无需保活"
+          fi
